@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Text, View, StyleSheet, Button, Image, Alert } from 'react-native';
+import { Text, View, StyleSheet, Button, Image, Alert, TouchableOpacity, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { TouchableOpacity } from 'react-native-gesture-handler';
+import * as FileSystem from 'expo-file-system';
 
 export default function Index() {
     const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined);
@@ -27,11 +27,37 @@ export default function Index() {
         }
     };
 
+    // Convert image URI to Base64 (for mobile platforms only)
+    const convertToBase64 = async (uri: string) => {
+        try {
+            const base64 = await FileSystem.readAsStringAsync(uri, {
+                encoding: FileSystem.EncodingType.Base64,
+            });
+            return `data:image/jpeg;base64,${base64}`; // Prepend the base64 string with this prefix
+        } catch (error) {
+            console.error('Error converting to Base64:', error);
+            return null;
+        }
+    };
+
     // Function to handle image upload
     const uploadImage = async () => {
         if (!selectedImage) {
             console.log('No image selected', 'Please select an image first.');
             return;
+        }
+
+        let base64Image;
+
+        // Check if the platform is web; if not, convert to Base64
+        if (Platform.OS !== 'web') {
+            base64Image = await convertToBase64(selectedImage);
+            if (!base64Image) {
+                console.log('Failed to convert image to Base64');
+                return;
+            }
+        } else {
+            base64Image = selectedImage; // On web, use the selected image URI directly
         }
 
         try {
@@ -41,7 +67,7 @@ export default function Index() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    image: selectedImage
+                    image: base64Image // Send the Base64 encoded image
                 })
             });
 
@@ -49,7 +75,7 @@ export default function Index() {
             if (result.success) {
                 console.log('Image uploaded successfully:', result.filePath);
             } else {
-                console.log('Upload failed:', result.message);
+                console.log('Upload failed. Error from server:', result.message);
             }
         } catch (error) {
             console.error('Error uploading the image:', error);
